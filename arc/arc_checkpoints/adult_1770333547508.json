@@ -1,0 +1,12 @@
+{
+  "type": "AdultSOM",
+  "version": 1,
+  "createdAtMs": 1770333547508,
+  "w": 16,
+  "h": 16,
+  "dim": 64,
+  "order": "row-major",
+  "endian": "little",
+  "weightClamp": "0..1",
+  "binaryFile": "adult_1770333547508.bin"
+}

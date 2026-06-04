@@ -1,0 +1,291 @@
+Below is a **concrete ablation plan** tailored to your ARC stack and the 13 roadmap items. The goal is to convert “sounds plausible” into **measurable deltas**, and to isolate **which mechanisms actually contribute** versus which just add complexity.
+
+I’m going to define: **targets**, **datasets/streams**, **metrics**, **protocol**, and then a **minimal experiment matrix** you can execute without exploding combinatorics.
+
+---
+
+# 0) Setup: What Ablation Must Prove
+
+For each candidate mechanism (M), you want:
+
+1. **Effect size:** does enabling (M) move key outcome metrics in the desired direction?
+2. **Specificity:** are improvements still present when controlling for confounders (amplitude, sigma, LR, etc.)?
+3. **Robustness:** does it hold across seeds and across at least two distinct input regimes?
+4. **Cost:** what latency/CPU/memory or instability does it introduce?
+
+Ablation isn’t just “on vs off.” It’s **on vs matched-control**.
+
+---
+
+# 1) Define the Core Outcomes (Dependent Variables)
+
+Pick a small set you will *always* report:
+
+## A. Representation quality (manifold + mapping)
+
+* **Quantization Error (QE):** mean distance(input, BMU weight)
+* **Topographic Error (TE):** % where 1st and 2nd BMUs are non-neighbors (or your equivalent)
+* **BMU diversity:** unique BMUs / window (and entropy of hits)
+
+## B. Temporal modeling
+
+* **TMR accuracy proxy:** distribution of prediction errors, and/or AUC for “surprise detection” on known perturbations
+* **Response latency:** ms until TWO1/TMR flags after injected paradox (stress suite)
+
+## C. Stability / health
+
+* **Curvature summary:** mean, max, and hotspot persistence duration
+* **Churn rate:** BMU jumps per window, or your churn metric
+* **Freeze behavior:** frequency, duration, and false-freeze rate
+
+## D. Fidelity (if audio loopback in scope)
+
+* **Input-output spectral divergence:** e.g., log-magnitude spectrum distance
+* **Alarm rate:** true positives vs false positives under controlled distortion
+
+**Rule:** Every ablation run outputs a single JSON/CSV row per window + a final summary.
+
+---
+
+# 2) Define the Input Regimes (Independent Contexts)
+
+You need at least **3 regimes** so results generalize:
+
+1. **Stationary regime:** same distribution for long durations
+   *Purpose:* test convergence and stability (QE/TE/curvature)
+2. **Structured periodic regime:** rhythmic or repeating cycles
+   *Purpose:* test multi-step TMR and coherence regulation
+3. **Non-stationary regime:** gradual drift + sudden shocks
+   *Purpose:* test replay, diffing, freeze, immune behavior
+
+If you don’t want external datasets, synthesize:
+
+* periodic: repeating “meter” sequences of BMU-driving vectors
+* shocks: step-change in mean + occasional paradox injection
+
+---
+
+# 3) Baseline Configuration (“B0”)
+
+Freeze a baseline system that is “reasonable but not fancy.”
+This matters because all effects are relative to it.
+
+**B0 recommended:**
+
+* Fixed Adult grid (8×8)
+* Current queue eviction (random)
+* Current validator (static controls)
+* Single-step TMR
+* No heartbeat-gating
+* No sigma feedback
+* No multi-band babies
+* No immune reset
+* No distributed telemetry (unless required for performance)
+
+You can later define B1/B2 baselines, but start with one.
+
+---
+
+# 4) Experimental Design: Fractional Factorial, Not Full Factorial
+
+You have 13 candidates; full factorial is impossible.
+
+Instead: do **targeted “one-at-a-time” (OAT)** first, then **interaction tests** only where OAT shows meaningful effect.
+
+## Step 1: OAT screening
+
+Run:
+
+* B0
+* B0 + M_i for each mechanism you care about
+
+But do it with:
+
+* **≥5 random seeds**
+* each across all **3 regimes**
+* report mean ± CI
+
+This identifies which mechanisms are “worth interaction testing.”
+
+## Step 2: Interaction testing (only for winners)
+
+For top 3–4 mechanisms from screening, test:
+
+* pairs: (M_a), (M_b), and (M_a+M_b)
+  This catches “works alone but breaks in combination.”
+
+---
+
+# 5) Matched-Control Designs (Critical)
+
+Some features change dynamics. You need controls to avoid attributing improvements to trivial side-effects.
+
+Examples:
+
+### (1) Entropy-weighted replay
+
+**Control:** “priority replay” but with random priorities (same eviction churn)
+This isolates “entropy” vs “just not random.”
+
+### (5) Heartbeat-gated learning
+
+**Control:** same average learning rate over time (duty-cycle compensated)
+So gating isn’t just “lower effective LR.”
+
+### (6) Coherence-based sigma regulation
+
+**Control:** sigma schedule that varies with same amplitude but independent of coherence (e.g., shuffled coherence signal)
+Isolates “feedback” vs “sigma variation.”
+
+### (8) Multi-band BabySOMs
+
+**Control:** same total Baby capacity but not split by band (e.g., 3 babies each seeing full band, or one bigger baby)
+Isolates “band specialization” vs “more parameters.”
+
+### (11) Multi-step TMR
+
+**Control:** same-step count but using naive persistence predictor (e.g., assume next=last)
+Isolates “real model” vs “just longer horizon.”
+
+### (13) Immune reset
+
+**Control:** “local smoothing only” without reinit
+Isolates “reset” vs “regularization.”
+
+---
+
+# 6) Success Criteria (Pre-register)
+
+Before running, define thresholds so you can say “works” without post-hoc rationalization.
+
+Example criteria (tune to your scale):
+
+A mechanism “passes screening” if:
+
+* QE improves by ≥ X% **or**
+* TE improves by ≥ Y% **or**
+* Response latency decreases by ≥ Z ms
+  AND
+* does not increase max-curvature hotspot persistence by > P%
+  AND
+* does not increase freeze false positives by > Q%
+
+You can set X/Y/Z/P/Q after one pilot run.
+
+---
+
+# 7) Concrete Ablation Plan for Your Roadmap Items
+
+## Early screening set (high feasibility)
+
+These are easiest to test and interpret:
+
+1. **Entropy-weighted replay**
+2. **Topological diffing** (as a measurement feature; ablate whether you *use* it downstream later)
+3. **Heartbeat-gated learning**
+4. **Coherence sigma feedback**
+5. **Multi-band babies**
+6. **Fidelity alarm freeze**
+7. **Multi-step TMR** (only if you already trust single-step)
+   10 is performance-only, not a learning ablation.
+
+## Defer screening until instrumentation is strong
+
+2 (blooming), 3 (dynamic confounders), 12 (gardening), 13 (immune reset), 7 (stress suite) — these need strong baselines to interpret.
+
+---
+
+# 8) Experiment Matrix (Minimal but Informative)
+
+Let’s define:
+
+* Seeds: **5**
+* Regimes: **3**
+* Duration: enough to get stable window stats (e.g., 30–60 minutes equivalent or N windows)
+
+### Phase A: Screening (OAT)
+
+Runs:
+
+* B0
+* B0+M1
+* B0+M5
+* B0+M6
+* B0+M8
+* B0+M9
+* (optional) B0+M11
+
+That’s 6–7 configs × 5 seeds × 3 regimes = 90–105 runs.
+If that’s too heavy, reduce to 3 seeds for screening, then 5 seeds for finalists.
+
+### Phase B: Matched controls
+
+For any mechanism that “wins,” add its matched control config.
+Example: B0+EntropyReplay vs B0+ShuffledPriorityReplay.
+
+### Phase C: Pairwise interactions (top 3)
+
+If winners are {1,6,8}, run:
+
+* B0 + (1+6)
+* B0 + (1+8)
+* B0 + (6+8)
+* B0 + (1+6+8)
+
+---
+
+# 9) Logging Schema (So Analysis Is Possible)
+
+Per window, log:
+
+* time, seed, regime, config_id
+* QE_mean, QE_p95
+* TE
+* bmu_entropy
+* churn
+* curvature_mean, curvature_max, hotspot_count, hotspot_persist
+* coherence_C
+* TMR_error stats
+* TWO1_count (if relevant)
+* freeze_events count/duration
+* if audio: spectral_divergence, alarm_count
+
+Final summary:
+
+* averages, CI, plus “fail conditions triggered” flags
+
+---
+
+# 10) Analysis: What Plots/Tables to Produce
+
+Minimum outputs per mechanism:
+
+1. **Effect size table**: Δ vs baseline with CI
+2. **Stability dashboard**: max curvature and freeze rate vs baseline
+3. **Regime-split results**: do not average across regimes; report per regime
+
+Decision rule:
+
+* If it helps only in one regime and harms in another, it’s not production-safe unless gated.
+
+---
+
+# 11) Practical Recommendations to Avoid Self-Deception
+
+* **Fix compute budget per run.** If a mechanism increases CPU, it may look “better” because it got more updates/time.
+* **Normalize learning exposure.** Equalize number of updates, not wall-clock, if performance varies.
+* **Separate training vs evaluation.** Evaluate on held-out segments or “probe injections” that aren’t learned from.
+* **Randomize regime order** to avoid warm-start effects biasing one config.
+
+---
+
+## What I need from you to make this executable in your codebase (no philosophical back-and-forth)
+
+Answer with just these specifics (short):
+
+1. What is your current window size for entropy/churn/TMR reporting (samples or ms)?
+2. Do you already compute QE/TE equivalents, or should we define them from your existing distance routines?
+3. Can you run a purely synthetic input stream (generated vectors) through the same pipeline, or must it be audio-derived?
+
+If you answer those, I can give you a **drop-in “ExperimentRunner” design**: config sweeps, seed handling, regime generators, and CSV output format.
+
